@@ -1,136 +1,111 @@
 import os
-import math
 import nltk
 from nltk.tokenize import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Ensure necessary NLTK data is downloaded
+# NLTK kütüphaneleri (Kelime ayırıcılar)
 try:
     nltk.data.find('tokenizers/punkt')
-    nltk.data.find('tokenizers/punkt_tab')
 except LookupError:
     print("[INIT] Downloading NLTK resources...")
     nltk.download('punkt')
-    nltk.download('punkt_tab')
 
-def preprocess_text(text):
+def lexical_richness(text):
     """
-    Normalizes text: converts to lowercase and tokenizes.
-    Removes punctuation to focus purely on word usage.
+    Type-Token Ratio (Sözdizimsel Zenginlik) hesaplar.
+    Yazarın kelime dağarcığı ne kadar geniş? Toplam kelime sayısına oranla kaç farklı kelime kullanmış?
     """
-    text = text.lower()
-    tokens = word_tokenize(text)
-    # Keep only alphanumeric words
+    tokens = word_tokenize(text.lower())
     words = [word for word in tokens if word.isalpha()]
-    return words
+    if not words: return 0
+    return len(set(words)) / len(words)
 
-def get_function_word_freq(words):
+def extract_linguistic_dna(ransom_text, suspects_texts):
     """
-    Extracts the 'Grammatical Fingerprint' of the author.
-    Analyzes the frequency of 'Function Words' (Stopwords) which are 
-    used subconsciously and are independent of the topic.
+    TF-IDF ve N-Gram kullanarak metinleri vektör uzayına çevirir ve 
+    Kosinüs Benzerliği (Cosine Similarity) ile karşılaştırır.
     """
-    # These words act as the 'DNA' of writing style
-    common_fingerprints = [
-        "the", "to", "and", "of", "a", "in", "that", "is", 
-        "for", "it", "with", "as", "was", "on", "at", "by",
-        "be", "this", "have", "from", "or", "not", "but"
-    ]
+    # Ransom Note (Fidye Mektubu) ilk sıraya, şüpheliler arkasına ekleniyor.
+    all_documents = [ransom_text] + suspects_texts
     
-    total_words = len(words)
-    if total_words == 0: return {}
+    # ngram_range=(1, 2) demek: Hem tek kelimelere (Unigram) hem de ikili kelime gruplarına (Bigram) bak!
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
     
-    frequencies = {}
-    for fp_word in common_fingerprints:
-        count = words.count(fp_word)
-        # Calculate percentage usage (e.g., 'the' constitutes 5% of text)
-        frequencies[fp_word] = (count / total_words) * 100
-        
-    return frequencies
-
-def compare_fingerprints(freq1, freq2):
-    """
-    Calculates the 'Manhattan Distance' between two linguistic fingerprints.
-    Lower score = Higher similarity (Same author probability).
-    """
-    diff_score = 0
-    for word in freq1:
-        val1 = freq1[word]
-        val2 = freq2.get(word, 0) # Get 0 if word not found
-        
-        # Absolute difference accumulation
-        diff_score += abs(val1 - val2)
-        
-    return diff_score
+    # Metinleri matematiksel matrislere çeviriyoruz
+    tfidf_matrix = vectorizer.fit_transform(all_documents)
+    
+    # İlk matris (Ransom Note) ile diğer matrisleri (Şüpheliler) karşılaştır
+    # [0:1] fidye mektubu, [1:] şüphelilerin tamamı
+    similarities = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:])
+    
+    return similarities[0]
 
 def main():
-    print("\n--- 🕵️‍♀️ LINGUISTIC DNA ANALYZER (FUNCTION WORD FORENSICS) ---")
-    print("[INFO] Analyzing grammatical patterns independent of text topic.\n")
+    print("=" * 60)
+    print("🧬 LINGUISTIC DNA FORENSICS V2.0 (STYLOMETRY ENGINE)")
+    print("=" * 60)
 
-    ransom_file = input("Enter Ransom Note filename (e.g., ransom.txt): ").strip()
-    suspects_folder = input("Enter Suspects Folder name (e.g., suspects): ").strip()
-
-    # Validation
-    if not os.path.exists(ransom_file):
-        print(f"❌ [ERROR] File '{ransom_file}' not found.")
+    # 1. READ RANSOM NOTE
+    ransom_path = 'ransom.txt'
+    if not os.path.exists(ransom_path):
+        print("❌ 'ransom.txt' bulunamadı!")
         return
-    
-    if not os.path.isdir(suspects_folder):
-        print(f"❌ [ERROR] Directory '{suspects_folder}' not found.")
-        return
-
-    # 1. ANALYZE TARGET (RANSOM NOTE)
-    try:
-        with open(ransom_file, 'r', encoding='utf-8') as f:
-            ransom_text = f.read()
-    except Exception as e:
-        print(f"❌ Read Error: {e}")
-        return
-    
-    r_words = preprocess_text(ransom_text)
-    r_freq = get_function_word_freq(r_words)
-
-    print(f"\n📄 [TARGET DNA EXTRACTED] Word Count: {len(r_words)}")
+        
+    with open(ransom_path, 'r', encoding='utf-8') as f:
+        ransom_text = f.read()
+        
+    r_richness = lexical_richness(ransom_text)
+    print(f"\n📄 [TARGET DNA EXTRACTED]")
+    print(f"   - Lexical Richness (Kelime Çeşitliliği): %{r_richness*100:.2f}")
     print("-" * 60)
 
-    # 2. ANALYZE SUSPECTS
-    suspects = [f for f in os.listdir(suspects_folder) if f.endswith('.txt')]
-    
-    if not suspects:
-        print("❌ No text files found in the suspects folder.")
+    # 2. READ SUSPECTS
+    suspects_folder = 'suspects'
+    if not os.path.exists(suspects_folder):
+        print(f"❌ '{suspects_folder}' klasörü bulunamadı!")
         return
+
+    suspect_files = [f for f in os.listdir(suspects_folder) if f.endswith('.txt')]
+    if not suspect_files:
+        print("❌ Şüpheli dosyaları bulunamadı.")
+        return
+
+    suspects_texts = []
+    for suspect in suspect_files:
+        path = os.path.join(suspects_folder, suspect)
+        with open(path, 'r', encoding='utf-8') as f:
+            suspects_texts.append(f.read())
+
+    # 3. DNA ANALYSIS (Makine Öğrenmesi Devrede)
+    print("🧠 TF-IDF ve N-Gram Analizi Başlatılıyor...")
+    similarity_scores = extract_linguistic_dna(ransom_text, suspects_texts)
 
     best_match = None
-    lowest_diff = float('inf') # Start with infinity
+    highest_score = 0
 
-    for suspect in suspects:
-        path = os.path.join(suspects_folder, suspect)
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                suspect_text = f.read()
-        except:
-            continue
+    print("\n🔍 ANALİZ SONUÇLARI:")
+    for idx, score in enumerate(similarity_scores):
+        suspect_name = suspect_files[idx]
+        s_richness = lexical_richness(suspects_texts[idx])
         
-        s_words = preprocess_text(suspect_text)
-        s_freq = get_function_word_freq(s_words)
+        # Yüzdelik dilime çeviriyoruz
+        match_percentage = score * 100
         
-        # Compare DNA
-        diff_score = compare_fingerprints(r_freq, s_freq)
+        print(f"\n👤 SUSPECT: {suspect_name}")
+        print(f"   - Lexical Richness: %{s_richness*100:.2f}")
+        print(f"   👉 DNA EŞLEŞME ORANI: %{match_percentage:.2f} (Daha yüksek daha iyi)")
         
-        print(f"👤 SUSPECT: {suspect}")
-        print(f"   - Word Count: {len(s_words)}")
-        print(f"   👉 DNA DIFF SCORE: {diff_score:.2f} (Lower is better)")
-        print("." * 30)
+        if match_percentage > highest_score:
+            highest_score = match_percentage
+            best_match = suspect_name
 
-        if diff_score < lowest_diff:
-            lowest_diff = diff_score
-            best_match = suspect
-
-    print("-" * 60)
-    if best_match:
-        print(f"🚨 [RESULT] PRIME SUSPECT IDENTIFIED: {best_match.upper()}")
-        print(f"   (Linguistic DNA match confirm. Diff Score: {lowest_diff:.2f})")
+    print("=" * 60)
+    if highest_score > 0:
+        print(f"🚨 KESİNLEŞMİŞ HEDEF: {best_match} (%{highest_score:.2f} Benzerlik)")
     else:
-        print("❌ Inconclusive Analysis.")
+        print("❓ Yeterli DNA eşleşmesi bulunamadı.")
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()

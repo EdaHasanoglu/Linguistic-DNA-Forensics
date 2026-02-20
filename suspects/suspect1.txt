@@ -1,4 +1,4 @@
-The project report must be delivered by Friday. 
-Do not talk to the client about the delay. 
-I am waiting for the results from the team. 
-This is your last chance to fix the bugs.
+Listen to the guidelines carefully.
+The report must be in the database by tomorrow, or else you will fail the security audit completely. 
+Do not try to bypass the firewall, and do not make any unauthorized changes. 
+I am monitoring the network.
